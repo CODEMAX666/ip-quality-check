@@ -40,38 +40,38 @@ export function classify({ enrichment, client = {}, handshake = {} }) {
   push(signals, {
     id: "tor_exit",
     layer: "observation",
-    label: "Tor exit node",
+    label: "Tor exit",
     matched: tor,
     weight: tor ? 0.95 : 0,
     detail: tor
       ? anonAsn?.type === "TOR"
         ? `AS${asn} is run by ${anonAsn.name}.`
-        : "Address is on the current Tor bulk exit list (or flagged by an enricher)."
-      : "Not present on the loaded Tor exit snapshot.",
+        : "On the current Tor exit list."
+      : "Not on the Tor exit list.",
   });
 
   const listedProviders = vpnServerProviders(enrichment.ip);
   push(signals, {
     id: "known_vpn_server",
     layer: "service",
-    label: "Published VPN server IP",
+    label: "Known VPN server",
     matched: Boolean(listedProviders),
     weight: listedProviders ? 0.98 : 0,
     detail: listedProviders
-      ? `Exact match in the server list ${listedProviders.join(", ")} publishes for its own apps.`
-      : "Not in any published provider server list (NordVPN, Proton, Surfshark, ExpressVPN, PIA, Mullvad, TunnelBear, hide.me, Hola, …).",
+      ? `Listed as a ${listedProviders.join(", ")} server.`
+      : "Not on any VPN provider's server list.",
   });
 
   const vpnRange = inVpnRange(enrichment.ip);
   push(signals, {
     id: "vpn_range",
     layer: "service",
-    label: "Known VPN netblock",
+    label: "VPN address range",
     matched: vpnRange,
     weight: vpnRange ? 0.85 : 0,
     detail: vpnRange
-      ? "Inside a netblock X4BNet attributes to commercial VPN providers."
-      : "Not inside a known VPN netblock.",
+      ? "Inside an address range used by VPN providers."
+      : "Not in a known VPN address range.",
   });
 
   const anonVpnAsn = anonAsn && anonAsn.type === "VPN";
@@ -86,27 +86,65 @@ export function classify({ enrichment, client = {}, handshake = {} }) {
   const ipqs = enrichment.ipqs || {};
   const vpnFlag = Boolean(enrichment.flags.vpn);
   const vpnDetected = Boolean(listedProviders || vpnRange || anonVpnAsn || vpnName || vpnFlag);
+
+  const proxy = Boolean(enrichment.flags.proxy || anonProxyAsn);
+  const flaggedBy = (enrichment.flaggedBy || []).map((source) => {
+    if (source === "IPQS") {
+      const kinds = [ipqs.vpn && "VPN", ipqs.proxy && "proxy"].filter(Boolean);
+      return kinds.length ? `IPQS (${kinds.join(", ")})` : "IPQS";
+    }
+    if (source === "proxycheck.io" && enrichment.proxycheck?.type) {
+      return `proxycheck.io (${enrichment.proxycheck.type})`;
+    }
+    return source;
+  });
+  push(signals, {
+    id: "proxy_flag",
+    layer: "observation",
+    label: "Proxy or VPN flag",
+    matched: proxy,
+    weight: proxy ? 0.72 : 0,
+    detail: proxy
+      ? flaggedBy.length
+        ? `Flagged by ${flaggedBy.join(" and ")}.`
+        : `AS${asn} belongs to ${anonAsn?.name || "a proxy network"}.`
+      : "No lookup service flagged it as a proxy or VPN.",
+  });
+
+  const highFraud = ipqs.fraudScore != null && ipqs.fraudScore >= 75;
+  push(signals, {
+    id: "fraud_score",
+    layer: "observation",
+    label: "High fraud score",
+    matched: highFraud,
+    weight: 0,
+    detail:
+      ipqs.fraudScore != null
+        ? `IPQS fraud score ${ipqs.fraudScore} out of 100.`
+        : "No fraud score available.",
+  });
+
   push(signals, {
     id: "vpn_service",
     layer: "service",
-    label: "VPN operator network",
+    label: "VPN provider network",
     matched: Boolean(anonAsn && anonAsn.type !== "TOR"),
     weight: anonAsn && anonAsn.type !== "TOR" ? 0.9 : 0,
     detail: anonAsn && anonAsn.type !== "TOR"
-      ? `AS${asn} is announced by ${anonAsn.name} itself (${anonAsn.type}).`
+      ? `AS${asn} belongs to ${anonAsn.name}.`
       : namedVpn
-        ? `Organization string names ${namedVpn}.`
-        : "ASN is not run by a VPN or proxy operator.",
+        ? `Network name mentions ${namedVpn}.`
+        : "Not run by a VPN or proxy company.",
   });
   push(signals, {
     id: "vpn_keyword",
     layer: "service",
-    label: "Generic VPN keyword",
+    label: "“VPN” in network name",
     matched: Boolean(genericVpn),
     weight: genericVpn ? 0.35 : 0,
     detail: genericVpn
-      ? "Organization/ISP string contains “VPN” but no named consumer brand. Weak prior only."
-      : "No generic VPN keyword without a brand match.",
+      ? "The network name contains “VPN”."
+      : "No “VPN” in the network name.",
   });
   if (namedVpn && namedVpn !== "Unnamed VPN keyword") services.push(namedVpn);
 
@@ -121,23 +159,12 @@ export function classify({ enrichment, client = {}, handshake = {} }) {
     weight: relay ? 0.8 : 0,
     detail: relay
       ? icloudRelay
-        ? "Inside published privacy relay egress ranges (Apple iCloud Private Relay, Google VPN, or Cloudflare WARP)."
-        : "Looks like Cloudflare WARP, Google VPN, or a similar OS/browser relay — anonymizing, but not a classic commercial VPN exit."
-      : "Not in published privacy relay egress ranges; no relay operator string found.",
+        ? "Apple Private Relay, Google VPN, or Cloudflare WARP address."
+        : "Looks like Cloudflare WARP, Google VPN, or a similar relay."
+      : "Not a privacy relay address.",
   });
 
   const heavyHostName = asn ? VPN_HEAVY_HOST_ASNS.get(asn) : null;
-  push(signals, {
-    id: "vpn_heavy_host",
-    layer: "routing",
-    label: "VPN-heavy hosting ASN",
-    matched: Boolean(heavyHostName && !anonAsn),
-    weight: heavyHostName && !anonAsn ? 0.4 : 0,
-    detail: heavyHostName && !anonAsn
-      ? `AS${asn} ${heavyHostName} rents servers to most commercial VPN brands. A strong prior, not proof this IP is an exit.`
-      : "ASN is not on the VPN-heavy hosting list.",
-  });
-
   const hostingFlag = Boolean(enrichment.flags.hosting);
   const hostingName = isHostingName(text);
   const hostingAsn = asn ? DATACENTER_ASNS.get(asn) || hostingAsnName(asn) : null;
@@ -148,69 +175,34 @@ export function classify({ enrichment, client = {}, handshake = {} }) {
   push(signals, {
     id: "datacenter",
     layer: "infrastructure",
-    label: "Datacenter / hosting network",
+    label: "Hosting network",
     matched: datacenter,
     weight: datacenter && !vpnDetected ? 0.28 : datacenter ? 0.12 : 0,
     detail: datacenter
-      ? `Hosting network${hostingAsn ? ` (AS${asn} ${hostingAsn})` : dcRange ? " (X4BNet datacenter netblock)" : ""}. Spur treats this as infrastructure=DATACENTER; VPN still needs a tunnel/service signal.`
-      : "Not a listed hosting ASN or datacenter netblock.",
+      ? `${enrichment.as?.organization || hostingAsn || "This network"} is a datacenter, not a home or mobile ISP.`
+      : "Not a datacenter or hosting network.",
   });
-
-  const proxy = Boolean(enrichment.flags.proxy || anonProxyAsn);
-  const flaggedBy = enrichment.flaggedBy || [];
   push(signals, {
-    id: "proxy_flag",
-    layer: "observation",
-    label: "Open proxy / anonymizer flag",
-    matched: proxy,
-    weight: proxy ? 0.72 : 0,
-    detail: proxy
-      ? flaggedBy.length
-        ? `Flagged as proxy/VPN by ${flaggedBy.join(", ")}.`
-        : `AS${asn} is run by a proxy network.`
-      : "No source flagged this IP as a proxy or VPN.",
-  });
-
-  const ipqsHit = Boolean(ipqs.vpn || ipqs.proxy || (ipqs.fraudScore != null && ipqs.fraudScore >= 75));
-  push(signals, {
-    id: "ipqs_reputation",
-    layer: "observation",
-    label: "IPQS VPN / proxy / fraud",
-    matched: ipqsHit,
-    weight: 0,
-    detail: ipqsHit
-      ? `IPQS: ${ipqs.type || "anonymizer"}${ipqs.vpn ? " · VPN" : ""}${ipqs.proxy ? " · Proxy" : ""}${
-          ipqs.fraudScore != null ? ` · fraud ${ipqs.fraudScore}` : ""
-        }.`
-      : ipqs.fraudScore != null
-        ? `IPQS fraud score ${ipqs.fraudScore}; no VPN/proxy flag.`
-        : "No IPQS VPN, proxy, or high fraud score.",
-  });
-
-  const proxycheckHit = Boolean(enrichment.proxycheck?.proxy || enrichment.proxycheck?.vpn);
-  push(signals, {
-    id: "proxycheck",
-    layer: "observation",
-    label: "proxycheck.io reputation",
-    matched: proxycheckHit,
-    weight: 0,
-    detail: enrichment.proxycheck
-      ? proxycheckHit
-        ? `proxycheck.io: ${enrichment.proxycheck.type || "proxy"} · risk ${enrichment.proxycheck.risk ?? "—"}.`
-        : `proxycheck.io: ${enrichment.proxycheck.type || "clear"} · risk ${enrichment.proxycheck.risk ?? 0}; not a proxy/VPN.`
-      : "proxycheck.io was not queried.",
+    id: "vpn_heavy_host",
+    layer: "routing",
+    label: "VPN-friendly host",
+    matched: Boolean(heavyHostName && !anonAsn),
+    weight: heavyHostName && !anonAsn ? 0.4 : 0,
+    detail: heavyHostName && !anonAsn
+      ? `${enrichment.as?.organization || heavyHostName} rents servers to many VPN services.`
+      : "Not a host known for VPN servers.",
   });
 
   const mobile = Boolean(enrichment.flags.mobile);
   push(signals, {
     id: "mobile_cgnat",
     layer: "infrastructure",
-    label: "Mobile / CGNAT",
+    label: "Mobile network",
     matched: mobile,
     weight: 0,
     detail: mobile
-      ? "Mobile carrier space. Many subscribers share one public IP, so one bad actor can taint the address — same caveat Spur documents for CGNAT."
-      : "Not classified as mobile carrier space.",
+      ? "Mobile carrier address, often shared by many people at once."
+      : "Not a mobile carrier address.",
   });
 
   const satellite = Boolean(enrichment.flags.satellite);
@@ -221,8 +213,8 @@ export function classify({ enrichment, client = {}, handshake = {} }) {
     matched: satellite,
     weight: 0,
     detail: satellite
-      ? "Satellite egress. The registered geo is often far from the user."
-      : "Not classified as satellite.",
+      ? "Satellite internet. The listed location can be far from the user."
+      : "Not a satellite ISP.",
   });
 
   const rir = rirGeoMismatch(
@@ -233,7 +225,7 @@ export function classify({ enrichment, client = {}, handshake = {} }) {
   push(signals, {
     id: "rir_geo_mismatch",
     layer: "routing",
-    label: "RIR vs claimed country",
+    label: "Registry vs location",
     matched: rir.matched,
     weight: rir.matched ? 0.52 : 0,
     detail: rir.detail,
@@ -247,7 +239,7 @@ export function classify({ enrichment, client = {}, handshake = {} }) {
   push(signals, {
     id: "org_asn_mismatch",
     layer: "routing",
-    label: "ASN vs allocated org",
+    label: "Owner mismatch",
     matched: orgConflict.matched,
     weight: orgConflict.matched ? 0.48 : 0,
     detail: orgConflict.detail,
@@ -257,7 +249,7 @@ export function classify({ enrichment, client = {}, handshake = {} }) {
   push(signals, {
     id: "foreign_org_geo",
     layer: "routing",
-    label: "Foreign operator on local geo",
+    label: "Foreign operator",
     matched: foreignOrg.matched,
     weight: foreignOrg.matched ? 0.55 : 0,
     detail: foreignOrg.detail,
@@ -279,7 +271,7 @@ export function classify({ enrichment, client = {}, handshake = {} }) {
   push(signals, {
     id: "geo_mismatch",
     layer: "client",
-    label: "Timezone vs IP geo",
+    label: "Time zone mismatch",
     matched: geo.matched,
     weight: geo.matched ? 0.22 : 0,
     detail: geo.detail,
@@ -294,7 +286,7 @@ export function classify({ enrichment, client = {}, handshake = {} }) {
   push(signals, {
     id: "webrtc_leak",
     layer: "client",
-    label: "WebRTC IP divergence",
+    label: "WebRTC leak",
     matched: webrtc.matched,
     weight: webrtc.matched ? 0.48 : 0,
     detail: webrtc.detail,
@@ -304,7 +296,7 @@ export function classify({ enrichment, client = {}, handshake = {} }) {
   push(signals, {
     id: "lang_mismatch",
     layer: "client",
-    label: "Language vs IP country",
+    label: "Language vs country",
     matched: lang.matched,
     weight: lang.matched ? 0.08 : 0,
     detail: lang.detail,
@@ -312,9 +304,9 @@ export function classify({ enrichment, client = {}, handshake = {} }) {
 
   const rtt = rttAnomaly(client.tcpRttMs, client.tlsRttMs);
   push(signals, {
-    id: "handshake_rtt",
-    layer: "handshake",
-    label: "TCP vs TLS handshake timing",
+    id: "connection_timing",
+    layer: "client",
+    label: "Connection timing",
     matched: rtt.matched,
     weight: rtt.matched ? 0.1 : 0,
     detail: rtt.detail,
@@ -391,29 +383,23 @@ function round(n) {
 }
 
 function geoMismatch(browserTz, ipTz) {
-  if (!browserTz && !ipTz) {
-    return { matched: false, detail: "No timezone from the browser or the IP." };
-  }
-  if (!browserTz) {
-    return { matched: false, detail: `IP timezone ${ipTz}; browser timezone not provided.` };
-  }
-  if (!ipTz) {
-    return { matched: false, detail: `Browser timezone ${browserTz}; IP timezone unknown.` };
+  if (!browserTz || !ipTz) {
+    return { matched: false, detail: "No time zone to compare." };
   }
   if (browserTz === ipTz) {
-    return { matched: false, detail: `Browser and IP both report ${browserTz}.` };
+    return { matched: false, detail: `Browser and IP both use ${browserTz}.` };
   }
   try {
     const diff = Math.abs(offsetMinutes(browserTz) - offsetMinutes(ipTz));
     if (diff >= 180) {
       return {
         matched: true,
-        detail: `${browserTz} vs ${ipTz} (${Math.round(diff / 60)}h apart). Spur calls this GEO_MISMATCH: users of a datacenter IP clustered far from the advertised city.`,
+        detail: `Browser is on ${browserTz}, but the IP is in ${ipTz} (${Math.round(diff / 60)} hours apart).`,
       };
     }
     return {
       matched: false,
-      detail: `${browserTz} vs ${ipTz}, but UTC offsets are within 3 hours — treated as same region.`,
+      detail: `Browser ${browserTz} and IP ${ipTz} are within 3 hours.`,
     };
   } catch {
     return { matched: false, detail: `Could not compare ${browserTz} with ${ipTz}.` };
@@ -433,54 +419,48 @@ function webrtcLeak(webrtcIps = [], known = []) {
   const knownSet = new Set(unique(known.map(cleanIp).filter(Boolean)));
   const extra = publicDiscovered.filter((ip) => !knownSet.has(ip));
   if (!discovered.length) {
-    return {
-      matched: false,
-      detail: "No WebRTC ICE candidates were collected (blocked STUN, mDNS-only, or timeout).",
-    };
+    return { matched: false, detail: "No WebRTC addresses collected." };
   }
   if (extra.length) {
     return {
       matched: true,
-      detail: `WebRTC advertised public IP ${extra.join(", ")} which differs from the HTTP handshake IP. One path is likely relayed.`,
+      detail: `The browser also exposed ${extra.join(", ")}, so traffic may be relayed.`,
     };
   }
-  return {
-    matched: false,
-    detail: `WebRTC candidates (${discovered.join(", ")}) match the handshake/public IP.`,
-  };
+  return { matched: false, detail: "WebRTC addresses match this IP." };
 }
 
 function languageMismatch(languages = [], countryCode) {
   if (!languages.length || !countryCode) {
-    return { matched: false, detail: "Not enough language/country data to compare." };
+    return { matched: false, detail: "No language and country to compare." };
   }
   const primary = String(languages[0] || "").toLowerCase();
   const region = primary.split("-")[1]?.toUpperCase();
   if (region && region !== countryCode && !["EN", "US", "GB"].includes(region)) {
     return {
       matched: true,
-      detail: `Primary language tag ${languages[0]} does not line up with IP country ${countryCode}. Soft signal only.`,
+      detail: `Browser language ${languages[0]} doesn't match ${countryCode}.`,
     };
   }
   return {
     matched: false,
-    detail: `Language ${languages[0]} is compatible with IP country ${countryCode}.`,
+    detail: `Browser language ${languages[0]} fits ${countryCode}.`,
   };
 }
 
 function rttAnomaly(tcp, tls) {
   if (tcp == null || tls == null) {
-    return { matched: false, detail: "No navigation timing available for this page load." };
+    return { matched: false, detail: "No timing data for this page load." };
   }
   if (tcp > 40 && tls > tcp * 2.8) {
     return {
       matched: true,
-      detail: `TLS handshake ${Math.round(tls)}ms vs TCP ${Math.round(tcp)}ms. Large gaps can appear on tunneled paths; this is a weak SNITCH-style prior, not proof.`,
+      detail: `Secure setup took ${Math.round(tls)}ms vs ${Math.round(tcp)}ms to connect. Big gaps can mean a tunnel.`,
     };
   }
   return {
     matched: false,
-    detail: `TCP ${Math.round(tcp)}ms / TLS ${Math.round(tls)}ms look consistent.`,
+    detail: `Connection timing looks normal (${Math.round(tcp)}ms / ${Math.round(tls)}ms).`,
   };
 }
 

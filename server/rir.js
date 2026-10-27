@@ -33,29 +33,29 @@ export function rirGeoMismatch(ip, countryCode, orgText = "") {
   const rir = rirForIp(ip);
   const cc = String(countryCode || "").toUpperCase();
   if (!rir || !cc) {
-    return { matched: false, rir, detail: "Not enough RIR/geo data to compare." };
+    return { matched: false, rir, detail: "Not enough data to compare registry and location." };
   }
   if (ANYCAST_ORGS.test(orgText)) {
-    return { matched: false, rir, detail: `${rir} space on a CDN/anycast org — not treated as geo spoofing.` };
+    return { matched: false, rir, detail: "CDN network, so registry and location are not compared." };
   }
   if (rir !== "ARIN" && ARIN_COUNTRIES.has(cc)) {
     return {
       matched: true,
       rir,
-      detail: `${ip} sits in ${rir} address space (not ARIN) but is geolocated to ${cc}. Spur treats this leased/reassigned prefix as GEO_MISMATCH — typical ISP-proxy / VPN inventory, not a US home ISP.`,
+      detail: `Registered with ${rir}, outside North America, but placed in ${cc}. Common for leased proxy and VPN addresses.`,
     };
   }
   if (rir === "ARIN" && !ARIN_COUNTRIES.has(cc) && !["BR", "AR", "CL", "CO"].includes(cc)) {
     return {
       matched: true,
       rir,
-      detail: `ARIN space geolocated to ${cc}. Prefix and claimed country do not line up.`,
+      detail: `Registered in North America, but placed in ${cc}.`,
     };
   }
   return {
     matched: false,
     rir,
-    detail: `${rir} allocation is consistent with claimed country ${cc}.`,
+    detail: `Registry (${rir}) fits ${cc}.`,
   };
 }
 
@@ -80,7 +80,7 @@ export function orgAsnConflict(asnOrg, organization, isp) {
   const c = fold(isp);
   const other = [b, c].filter((x) => x && x !== a);
   if (!a || !other.length) {
-    return { matched: false, detail: "ASN and organization strings are the same family, or one is missing." };
+    return { matched: false, detail: "Network and owner match." };
   }
   for (const candidate of other) {
     if (a === candidate || a.includes(candidate) || candidate.includes(a)) continue;
@@ -89,10 +89,10 @@ export function orgAsnConflict(asnOrg, organization, isp) {
     if (overlap.length) continue;
     return {
       matched: true,
-      detail: `ASN org “${asnOrg}” does not match allocated org “${organization || isp}”. Leased prefixes (Turknet space announced as RCN, etc.) are how ISP proxies get a US ISP label.`,
+      detail: `Network is ${asnOrg}, but the address is registered to ${organization || isp}.`,
     };
   }
-  return { matched: false, detail: "ASN organization and WHOIS org look like the same operator." };
+  return { matched: false, detail: "Network and owner match." };
 }
 
 function sameBrand(a, b) {
@@ -125,22 +125,23 @@ const FOREIGN_HINTS = [
 export function foreignOrgInCountry(text, countryCode) {
   const cc = String(countryCode || "").toUpperCase();
   if (!text || !cc) {
-    return { matched: false, detail: "No org/country pair to compare." };
+    return { matched: false, detail: "No operator and country to compare." };
   }
   for (const hint of FOREIGN_HINTS) {
     if (hint.country !== cc && hint.re.test(text)) {
       return {
         matched: true,
-        detail: `Organization string looks like ${hint.country} (${text.slice(0, 80)}) while the IP is geolocated to ${cc}.`,
+        detail: `Operator looks based in ${hint.country}, but the IP is placed in ${cc}.`,
       };
     }
   }
-  return { matched: false, detail: "No foreign-operator hint on this org for the claimed country." };
+  return { matched: false, detail: "Operator fits the IP's country." };
 }
 
 function fold(value) {
   return String(value || "")
     .toLowerCase()
+    .replace(/&/g, "")
     .replace(/as\d+/g, " ")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();

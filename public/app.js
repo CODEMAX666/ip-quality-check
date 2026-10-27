@@ -9,9 +9,9 @@ const state = {
   circle: null,
 };
 
-boot().catch((error) => {
-  setNote(error.message || "Handshake failed.");
-});
+const CLEAR_SUMMARY = ["proxy_flag", "known_vpn_server", "tor_exit", "datacenter"];
+
+boot().catch(showError);
 
 $("lookup-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -61,15 +61,38 @@ function initMap() {
 }
 
 async function classifyIp(ip, client) {
-  $("verdict-label").textContent = "Classifying…";
-  const result = await postJson("/api/classify", { ip, client });
-  state.result = result;
-  renderResult(result);
+  $("verdict-label").textContent = "Checking…";
+  try {
+    const result = await postJson("/api/classify", { ip, client });
+    state.result = result;
+    renderResult(result);
+  } catch (error) {
+    showError(error, ip);
+  }
+}
+
+function showError(error, ip) {
+  if (ip) $("ip-display").textContent = ip;
+  $("place").textContent = "";
+  $("facts").innerHTML = "";
+  $("signals").innerHTML = "";
+  setTone($("map"));
+  setTone(document.querySelector(".card"));
+  drawMap({});
+  $("verdict").className = "verdict";
+  $("verdict-label").textContent = "Check failed";
+  $("verdict-score").textContent = error?.message || "Try again in a moment.";
+}
+
+function setTone(el, tone) {
+  for (const name of [...el.classList]) {
+    if (name.startsWith("tone-")) el.classList.remove(name);
+  }
+  if (tone) el.classList.add(`tone-${tone}`);
 }
 
 function renderHandshake(data) {
   $("ip-display").textContent = data.classifyIp || data.ip || "unknown";
-  setNote("");
 }
 
 function renderResult(result) {
@@ -84,22 +107,8 @@ function renderResult(result) {
   $("ip-display").textContent = result.handshake?.lookedUp || ctx.ip;
   $("place").textContent = placeLine(loc) || "Location unknown";
   $("place").title = placeAlt(loc);
-  const mapEl = $("map");
-  for (const name of [...mapEl.classList]) {
-    if (name.startsWith("tone-")) mapEl.classList.remove(name);
-  }
-  mapEl.classList.add(`tone-${tone}`);
-  const card = document.querySelector(".card");
-  for (const name of [...card.classList]) {
-    if (name.startsWith("tone-")) card.classList.remove(name);
-  }
-  card.classList.add(`tone-${tone}`);
-
-  if (result.handshake?.lookedUp && result.handshake.lookedUp !== state.handshake?.classifyIp) {
-    setNote(`Lookup · handshake ${state.handshake?.ip}`);
-  } else {
-    setNote("");
-  }
+  setTone($("map"), tone);
+  setTone(document.querySelector(".card"), tone);
 
   const risks = ctx.risks || [];
   const ipqs = ctx.ipqs || {};
@@ -121,17 +130,16 @@ function renderResult(result) {
 
   const signals = ctx.signals || [];
   const matched = signals.filter((signal) => signal.matched);
-  const shown = matched.length ? matched : signals.slice(0, 4);
+  const shown = matched.length
+    ? matched
+    : signals.filter((signal) => CLEAR_SUMMARY.includes(signal.id));
   $("signals").innerHTML = shown
     .map(
       (signal) => `
-      <article class="signal ${signal.matched ? "hit" : "clear"}">
-        <div>
-          <h3>${escapeHtml(signal.label)}</h3>
-          <p>${escapeHtml(signal.detail)}</p>
-        </div>
-        <span class="pill">${signal.matched ? "matched" : "clear"}</span>
-      </article>`
+      <li class="signal ${signal.matched ? "hit" : "clear"}">
+        <p class="signal-label">${escapeHtml(signal.label)}</p>
+        <p class="signal-detail">${escapeHtml(signal.detail)}</p>
+      </li>`
     )
     .join("");
 
@@ -182,7 +190,11 @@ function drawMap(loc, tone = "warn") {
     fillOpacity: 0.18,
   }).addTo(map);
 
-  const padLeft = window.innerWidth > 860 ? 430 : 20;
+  const card = document.querySelector(".card");
+  const padLeft =
+    getComputedStyle(card).position === "absolute"
+      ? card.getBoundingClientRect().right - map.getContainer().getBoundingClientRect().left + 24
+      : 20;
   map.flyToBounds(L.latLng(latlng).toBounds(120000), {
     paddingTopLeft: [padLeft, 24],
     paddingBottomRight: [48, 48],
@@ -208,6 +220,7 @@ async function collectClientSignals() {
     languages: [...(navigator.languages || [navigator.language])].filter(Boolean),
     userAgent: navigator.userAgent,
     platform: navigator.userAgentData?.platform || navigator.platform,
+    webdriver: navigator.webdriver === true,
     webrtcIps,
     browserPublicIp,
     tcpRttMs: finite(tcpRttMs),
@@ -279,13 +292,6 @@ function toneHex(tone) {
     warn: "#f59e0b",
     relay: "#a855f7",
   }[tone] || "#f59e0b";
-}
-
-function setNote(text) {
-  const el = $("handshake-note");
-  if (!el) return;
-  el.textContent = text || "";
-  el.classList.toggle("hidden", !text);
 }
 
 function placeLine(loc) {

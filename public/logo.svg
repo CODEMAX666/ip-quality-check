@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <title>IP Quality Check</title>
+  <defs>
+    <linearGradient id="iqc-pin" x1="32" y1="6" x2="32" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#EA8442"/>
+      <stop offset="1" stop-color="#C2531B"/>
+    </linearGradient>
+    <mask id="iqc-check" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <rect width="64" height="64" fill="#fff"/>
+      <path d="M24.5 23.5l5.3 5.3 10-11" fill="none" stroke="#000" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <ellipse cx="32" cy="52" rx="16" ry="5" fill="none" stroke="#D56A2A" stroke-opacity=".55" stroke-width="2.5"/>
+  <path d="M32 52S15 38 15 23a17 17 0 0 1 34 0c0 15-17 29-17 29Z" fill="url(#iqc-pin)" mask="url(#iqc-check)"/>
+</svg>

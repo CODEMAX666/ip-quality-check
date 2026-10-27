@@ -4,7 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>IP Quality Check</title>
+    <meta name="description" content="Check any IP address for VPN, proxy, Tor, and hosting risk, and see where it is on a map." />
+    <meta name="theme-color" content="#12140f" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -16,38 +21,42 @@
   </head>
   <body>
     <header class="top">
-      <h1>IP Quality Check</h1>
+      <h1 class="brand">
+        <img class="brand-mark" src="/logo.svg" alt="" width="48" height="48" />
+        IP Quality Check
+      </h1>
       <form id="lookup-form" class="lookup">
-        <label for="lookup-ip">Look up a public IP</label>
+        <label for="lookup-ip">Enter an IP address</label>
         <div class="row">
-          <input id="lookup-ip" name="ip" placeholder="203.0.113.10" autocomplete="off" spellcheck="false" />
-          <button type="submit">Classify</button>
+          <input id="lookup-ip" name="ip" placeholder="e.g. 8.8.8.8" autocomplete="off" spellcheck="false" />
+          <button type="submit">Check IP</button>
         </div>
       </form>
     </header>
 
-    <main class="stage">
-      <div id="map" role="img" aria-label="Approximate IP location"></div>
-      <p class="map-empty hidden" id="map-empty">No coordinates yet — waiting on the handshake.</p>
+    <div class="layout">
+      <main class="stage">
+        <div id="map" role="img" aria-label="Approximate IP location"></div>
+        <p class="map-empty hidden" id="map-empty">No map location for this IP.</p>
 
-      <aside class="card">
-        <p class="ip" id="ip-display">—</p>
-        <p class="place" id="place"></p>
-        <p class="hint hidden" id="handshake-note"></p>
+        <aside class="card">
+          <p class="ip" id="ip-display">—</p>
+          <p class="place" id="place"></p>
 
-        <div class="verdict" id="verdict">
-          <p class="verdict-label" id="verdict-label">Pending handshake</p>
-          <p class="verdict-score" id="verdict-score"></p>
-        </div>
+          <div class="verdict" id="verdict">
+            <p class="verdict-label" id="verdict-label">Checking…</p>
+            <p class="verdict-score" id="verdict-score"></p>
+          </div>
 
-        <dl class="facts" id="facts"></dl>
-      </aside>
-    </main>
+          <dl class="facts" id="facts"></dl>
+        </aside>
+      </main>
 
-    <section class="signals-wrap">
-      <h2>Open signals</h2>
-      <div id="signals" class="signals"></div>
-    </section>
+      <section class="signals-wrap">
+        <h2>Why this result</h2>
+        <ul id="signals" class="signals"></ul>
+      </section>
+    </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="/app.js" type="module"></script>

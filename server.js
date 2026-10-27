@@ -2,6 +2,7 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { botReason, overLimit } from "./server/bots.js";
 import { classify } from "./server/classify.js";
 import { enrichIp, publicEgressIp } from "./server/enrich.js";
 import { clientIpFromRequest, isPrivateIp, isValidIp, normalizeIp } from "./server/ip.js";
@@ -17,6 +18,18 @@ const PORT = Number(process.env.PORT) || 3780;
 app.set("trust proxy", true);
 app.use(express.json({ limit: "32kb" }));
 app.use(express.static(path.join(__dirname, "public")));
+
+app.use("/api", (req, res, next) => {
+  if (req.path === "/health") return next();
+  const reason = botReason(req);
+  if (reason) {
+    return res.status(403).json({ error: "Automated requests are not allowed.", reason });
+  }
+  if (req.method === "POST" && overLimit(clientIpFromRequest(req).ip || "unknown")) {
+    return res.status(429).json({ error: "Too many lookups. Wait a minute and try again." });
+  }
+  next();
+});
 
 ensureTorList().catch(() => {});
 
@@ -59,10 +72,14 @@ app.get("/api/ip", async (req, res) => {
 app.post("/api/classify", async (req, res) => {
   try {
     const handshake = clientIpFromRequest(req);
-    const requested = normalizeIp(req.body?.ip);
+    const typed = String(req.body?.ip ?? "").trim();
+    const requested = normalizeIp(typed);
+    if (typed && !requested) {
+      return res.status(400).json({ error: "That isn't a valid IP address." });
+    }
     const ip = requested || handshake.ip;
     if (!isValidIp(ip)) {
-      return res.status(400).json({ error: "No valid IP to classify." });
+      return res.status(400).json({ error: "Enter a valid IP address." });
     }
 
     const privateTarget = isPrivateIp(ip);

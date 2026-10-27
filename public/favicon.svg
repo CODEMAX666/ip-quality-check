@@ -1,7 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-  <rect width="48" height="48" fill="#12140f"/>
-  <circle cx="24" cy="24" r="16" fill="none" stroke="#d56a2a" stroke-width="2"/>
-  <ellipse cx="24" cy="24" rx="7" ry="16" fill="none" stroke="#d56a2a" stroke-width="1.4"/>
-  <path d="M8 24h32" stroke="#d56a2a" stroke-width="1.4"/>
-  <circle cx="24" cy="24" r="2.4" fill="#f0ead8"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="iqc-pin" x1="16" y1="2" x2="16" y2="30.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#EA8442"/>
+      <stop offset="1" stop-color="#C2531B"/>
+    </linearGradient>
+    <mask id="iqc-check" maskUnits="userSpaceOnUse" x="0" y="0" width="32" height="32">
+      <rect width="32" height="32" fill="#fff"/>
+      <path d="M11.2 12.8l3.4 3.4 6.3-7" fill="none" stroke="#000" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <path d="M16 30.5S5.5 21.5 5.5 12.5a10.5 10.5 0 0 1 21 0c0 9-10.5 18-10.5 18Z" fill="url(#iqc-pin)" mask="url(#iqc-check)"/>
 </svg>
