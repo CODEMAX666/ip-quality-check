@@ -6,7 +6,7 @@ const PORT = 3799;
 const BASE = `http://127.0.0.1:${PORT}`;
 
 test("server serves the page and API", async (t) => {
-  const server = spawn(process.execPath, ["server/index.js"], {
+  const server = spawn(process.execPath, ["server.js"], {
     env: { ...process.env, PORT: String(PORT) },
     stdio: ["ignore", "pipe", "inherit"],
   });

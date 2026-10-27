@@ -8,8 +8,8 @@
     "node": "22.x"
   },
   "scripts": {
-    "start": "node server/index.js",
-    "dev": "node --watch server/index.js",
+    "start": "node server.js",
+    "dev": "node --watch server.js",
     "test": "node --test",
     "update-intel": "node scripts/update-intel.js"
   },

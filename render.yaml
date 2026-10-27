@@ -1,9 +1,0 @@
-services:
-  - type: web
-    name: ip-quality-check
-    runtime: node
-    plan: free
-    buildCommand: npm ci
-    startCommand: npm start
-    healthCheckPath: /api/health
-    autoDeployTrigger: checksPass

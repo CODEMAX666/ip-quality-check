@@ -2,21 +2,21 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { classify } from "./classify.js";
-import { enrichIp, publicEgressIp } from "./enrich.js";
-import { clientIpFromRequest, isPrivateIp, isValidIp, normalizeIp } from "./ip.js";
-import { intelMeta } from "./intel.js";
-import { ensureTorList, torMeta } from "./tor.js";
+import { classify } from "./server/classify.js";
+import { enrichIp, publicEgressIp } from "./server/enrich.js";
+import { clientIpFromRequest, isPrivateIp, isValidIp, normalizeIp } from "./server/ip.js";
+import { intelMeta } from "./server/intel.js";
+import { ensureTorList, torMeta } from "./server/tor.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-loadEnv(path.join(__dirname, "..", ".env"));
+loadEnv(path.join(__dirname, ".env"));
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3780;
 
 app.set("trust proxy", true);
 app.use(express.json({ limit: "32kb" }));
-app.use(express.static(path.join(__dirname, "..", "public")));
+app.use(express.static(path.join(__dirname, "public")));
 
 ensureTorList().catch(() => {});
 
