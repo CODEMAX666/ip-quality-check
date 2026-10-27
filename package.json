@@ -1,0 +1,19 @@
+{
+  "name": "handshake-geo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Detect the connecting IP first, then classify VPN/proxy/datacenter context before querying Spur.",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test",
+    "update-intel": "node scripts/update-intel.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

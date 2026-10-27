@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>IP Quality Check</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <h1>IP Quality Check</h1>
+      <form id="lookup-form" class="lookup">
+        <label for="lookup-ip">Look up a public IP</label>
+        <div class="row">
+          <input id="lookup-ip" name="ip" placeholder="203.0.113.10" autocomplete="off" spellcheck="false" />
+          <button type="submit">Classify</button>
+        </div>
+      </form>
+    </header>
+
+    <main class="stage">
+      <div id="map" role="img" aria-label="Approximate IP location"></div>
+      <p class="map-empty hidden" id="map-empty">No coordinates yet — waiting on the handshake.</p>
+
+      <aside class="card">
+        <p class="ip" id="ip-display">—</p>
+        <p class="place" id="place"></p>
+        <p class="hint hidden" id="handshake-note"></p>
+
+        <div class="verdict" id="verdict">
+          <p class="verdict-label" id="verdict-label">Pending handshake</p>
+          <p class="verdict-score" id="verdict-score"></p>
+        </div>
+
+        <dl class="facts" id="facts"></dl>
+      </aside>
+    </main>
+
+    <section class="signals-wrap">
+      <h2>Open signals</h2>
+      <div id="signals" class="signals"></div>
+    </section>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
